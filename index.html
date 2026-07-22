@@ -168,14 +168,22 @@ let projGrowth=10, projInvest=10, ticket=350000;
 // Médias de investimento mensal informadas pelo usuário (aplicadas como padrão em todos os meses)
 // Meta Ads = Facebook Ads | Portais = Zap+OLX + Imóvel Web | Site = Google Ads + Remarketing Google
 // ChavesNaMão = Chaves na Mão (portal) | Outros = Pontos de mídia (LED e ônibus, institucional/offline)
-const DEFAULT_INV = {
-  'Portais': 41909.42 + 6712.80,   // Zap,OLX + Imóvel Web
-  'Site': 30000 + 2000,            // Google Ads + Remarketing Google
-  'Meta Ads': 32673.38,            // Facebook Ads
-  'WhatsApp': 0,
-  'ChavesNaMão': 1592.00,
-  'Outros': 29250.00               // Pontos de mídia (LED e ônibus) - institucional, não geram lead direto rastreável
+// Valores informados pelo usuário = TOTAL gasto no período inteiro (jan/2025 a jul/2026 = 19 meses), não mensal.
+// Por isso dividimos por 19 para achar a média mensal correta.
+const PERIODO_MESES = 19;
+const TOTAL_PERIODO = {
+  zapOlx: 41909.42, imovelWeb: 6712.80, googleAds: 30000, remarketing: 2000,
+  facebookAds: 32673.38, chavesNaMao: 1592.00, pontosMidia: 29250.00
 };
+const DEFAULT_INV = {
+  'Portais': (TOTAL_PERIODO.zapOlx + TOTAL_PERIODO.imovelWeb) / PERIODO_MESES,
+  'Site': (TOTAL_PERIODO.googleAds + TOTAL_PERIODO.remarketing) / PERIODO_MESES,
+  'Meta Ads': TOTAL_PERIODO.facebookAds / PERIODO_MESES,
+  'WhatsApp': 0,
+  'ChavesNaMão': TOTAL_PERIODO.chavesNaMao / PERIODO_MESES,
+  'Outros': TOTAL_PERIODO.pontosMidia / PERIODO_MESES
+};
+const MONTHS_WITH_DATA = {2025:12, 2026:7}; // 2026 só tem jan-jul lançados até agora
 let investData={}; // key "y:m:g" -> valor
 
 const fmt = n => n.toLocaleString('pt-BR',{maximumFractionDigits:0});
@@ -184,16 +192,29 @@ const pct = (a,b) => b>0 ? (a/b*100).toFixed(1)+'%' : '—';
 
 function invKey(y,m,g){ return `inv:${y}:${m}:${g}`; }
 
+async function getInvest(y,mIdx,g){
+  try{
+    const r = await window.storage.get(invKey(y,mIdx,g));
+    return r? parseFloat(r.value) : DEFAULT_INV[g];
+  }catch(e){ return DEFAULT_INV[g]; }
+}
+
 async function loadPersisted(){
   try{ const r = await window.storage.get('ticket_medio'); if(r) ticket = parseFloat(r.value); }catch(e){}
   try{ const r = await window.storage.get('ideal_targets'); if(r) idealTargets = JSON.parse(r.value); }catch(e){}
   try{ const r = await window.storage.get('proj_premissa'); if(r){ const p=JSON.parse(r.value); projGrowth=p.g; projInvest=p.i; } }catch(e){}
   const y = document.getElementById('year').value, m = document.getElementById('month').value;
-  for(const g of GROUPS){
-    try{
-      const r = await window.storage.get(invKey(y,m,g));
-      investData[invKey(y,m,g)] = r? parseFloat(r.value) : DEFAULT_INV[g];
-    }catch(e){ investData[invKey(y,m,g)] = DEFAULT_INV[g]; }
+  if(m==='ALL'){
+    for(const g of GROUPS){
+      let sum=0;
+      const n = MONTHS_WITH_DATA[y] || 12;
+      for(let i=0;i<n;i++){ sum += await getInvest(y,i,g); }
+      investData[invKey(y,'ALL',g)] = sum;
+    }
+  } else {
+    for(const g of GROUPS){
+      investData[invKey(y,m,g)] = await getInvest(y,m,g);
+    }
   }
 }
 
@@ -201,6 +222,7 @@ function buildSelectors(){
   const yearSel = document.getElementById('year');
   [2025,2026].forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent=y; yearSel.appendChild(o); });
   const monthSel = document.getElementById('month');
+  const optAll = document.createElement('option'); optAll.value='ALL'; optAll.textContent='📅 Geral do Ano'; monthSel.appendChild(optAll);
   MONTHS.forEach((mm,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=mm; monthSel.appendChild(o); });
 }
 
@@ -234,8 +256,23 @@ async function render(){
   contentEl.classList.add('animate');
 
   const y = document.getElementById('year').value;
-  const m = parseInt(document.getElementById('month').value);
-  const monthData = DATA[y][m];
+  const mRaw = document.getElementById('month').value;
+  const isAll = mRaw === 'ALL';
+  const m = isAll ? null : parseInt(mRaw);
+
+  let monthData;
+  if(isAll){
+    monthData = {};
+    for(const g of GROUPS){
+      const sum=[0,0,0,0,0,0];
+      const n = MONTHS_WITH_DATA[y] || 12;
+      for(let i=0;i<n;i++){ const raw = DATA[y][i][g]; for(let k=0;k<6;k++) sum[k]+=raw[k]; }
+      monthData[g]=sum;
+    }
+  } else {
+    monthData = DATA[y][m];
+  }
+
   const tbody = document.querySelector('#funilTable tbody');
   tbody.innerHTML='';
   let tot=[0,0,0,0,0,0], totInv=0;
@@ -243,7 +280,7 @@ async function render(){
   for(const g of GROUPS){
     const raw = monthData[g];
     const scen = applyScenario(raw, g);
-    const invKeyStr = invKey(y,m,g);
+    const invKeyStr = invKey(y,isAll?'ALL':m,g);
     let inv = investData[invKeyStr] || 0;
     if(scenario==='proj') inv = inv*(1+projInvest/100);
     totInv += inv;
@@ -257,7 +294,7 @@ async function render(){
     tr.innerHTML = `<td>${g}</td>
       <td>${fmt(scen[0])}</td><td>${fmt(scen[1])}</td><td>${fmt(scen[2])}</td>
       <td>${fmt(scen[3])}</td><td>${fmt(scen[4])}</td><td>${fmt(scen[5])}</td>
-      <td>${scenario==='atual'?`<input class="inv" data-g="${g}" type="number" value="${inv||''}" placeholder="0">`:fmtR(inv)}</td>
+      <td>${(scenario==='atual' && !isAll)?`<input class="inv" data-g="${g}" type="number" value="${inv||''}" placeholder="0">`:fmtR(inv)}</td>
       <td>${cpl?fmtR(cpl):'—'}</td>
       <td>${cac?fmtR(cac):'—'}</td>
       <td>${roas? roas.toFixed(2)+'x' : '—'}</td>`;
@@ -276,8 +313,9 @@ async function render(){
   // KPIs
   const kpis = document.getElementById('kpis');
   const convLeadNeg = pct(tot[5],tot[0]);
+  const periodoLbl = isAll ? `Geral ${y}` : MONTHS[m];
   kpis.innerHTML = `
-    <div class="kpi"><div class="lbl">Leads (${MONTHS[m]})</div><div class="val">${fmt(tot[0])}</div></div>
+    <div class="kpi"><div class="lbl">Leads (${periodoLbl})</div><div class="val">${fmt(tot[0])}</div></div>
     <div class="kpi"><div class="lbl">Visitas</div><div class="val">${fmt(tot[3])}</div></div>
     <div class="kpi"><div class="lbl">Negócios</div><div class="val red">${fmt(tot[5])}</div></div>
     <div class="kpi"><div class="lbl">Conversão Lead→Negócio</div><div class="val">${convLeadNeg}</div></div>
@@ -286,7 +324,8 @@ async function render(){
   `;
 
   const partialNote = document.getElementById('partialNote');
-  if(String(y)==='2026' && m===6){ partialNote.textContent = '⚠ Mês parcial — dados até 22/07/2026, ainda em fechamento.'; }
+  if(isAll && String(y)==='2026'){ partialNote.textContent = '⚠ Ano parcial — soma real disponível apenas Jan–Jul/2026 (Ago–Dez ainda não lançados, entram como zero).'; }
+  else if(!isAll && String(y)==='2026' && m===6){ partialNote.textContent = '⚠ Mês parcial — dados até 22/07/2026, ainda em fechamento.'; }
   else { partialNote.textContent=''; }
 
   document.getElementById('ticket').value = ticket;
