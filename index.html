@@ -62,6 +62,7 @@ button.save:hover{background:var(--red-dark)}
 #content.animate .kpi:nth-child(4){animation-delay:.14s}
 #content.animate .kpi:nth-child(5){animation-delay:.18s}
 #content.animate .kpi:nth-child(6){animation-delay:.22s}
+#content.animate .kpi:nth-child(7){animation-delay:.26s}
 #content.animate tbody tr{animation:fadeSlide .3s ease backwards}
 #content.animate tbody tr:nth-child(1){animation-delay:.05s}
 #content.animate tbody tr:nth-child(2){animation-delay:.09s}
@@ -122,14 +123,17 @@ select:hover,input:hover{border-color:var(--red)}
     <button class="save" id="saveIdeal">Salvar metas</button>
   </div>
   <div class="ideal-box">
-    <h2 style="color:var(--red);font-size:13px;margin:0 0 4px">Premissa do cenário PROJETADO</h2>
-    <label>Crescimento de leads esperado (%) sobre o mês selecionado</label>
-    <input id="projGrowth" type="number" step="1">
-    <label>Investimento adicional esperado (%) sobre o investido no mês</label>
-    <input id="projInvest" type="number" step="1">
-    <div class="note" style="margin-top:10px">Projetado aplica o crescimento de leads sobre o volume real do mês, mantendo as taxas de conversão atuais do mês, e o investimento ajustado — útil para simular o próximo período.</div>
-    <button class="save" id="saveProj">Salvar premissa</button>
+    <h2 style="color:var(--red);font-size:13px;margin:0 0 4px">Simulador: escalar investimento (Projetado)</h2>
+    <label>Quanto você vai aumentar o investimento (%)</label>
+    <input id="projInvest" type="number" step="5">
+    <div class="note" style="margin-top:10px">O simulador assume que o <b>CPL (custo por lead) de cada canal se mantém constante</b> — ou seja, se você aumentar o investimento em X%, o volume de leads sobe X% na mesma proporção, e as taxas de conversão reais do período seguem valendo. É uma estimativa linear pra mostrar o potencial de escala, não uma garantia (na prática pode haver saturação de público/portal).</div>
+    <button class="save" id="saveProj">Salvar simulação</button>
   </div>
+</div>
+
+<div class="section" id="projSummarySection" style="display:none">
+  <h2>Resultado da escala de investimento</h2>
+  <div class="grid" id="projSummary"></div>
 </div>
 
 <script>
@@ -164,7 +168,7 @@ DATA[2026] = [
 
 let scenario='atual';
 let idealTargets={i1:15,i2:30,i3:90,i4:35,i5:40}; // taxas default (%)
-let projGrowth=10, projInvest=10, ticket=350000;
+let projInvest=20, ticket=350000;
 // Médias de investimento mensal informadas pelo usuário (aplicadas como padrão em todos os meses)
 // Meta Ads = Facebook Ads | Portais = Zap+OLX + Imóvel Web | Site = Google Ads + Remarketing Google
 // ChavesNaMão = Chaves na Mão (portal) | Outros = Pontos de mídia (LED e ônibus, institucional/offline)
@@ -202,7 +206,7 @@ async function getInvest(y,mIdx,g){
 async function loadPersisted(){
   try{ const r = await window.storage.get('ticket_medio'); if(r) ticket = parseFloat(r.value); }catch(e){}
   try{ const r = await window.storage.get('ideal_targets'); if(r) idealTargets = JSON.parse(r.value); }catch(e){}
-  try{ const r = await window.storage.get('proj_premissa'); if(r){ const p=JSON.parse(r.value); projGrowth=p.g; projInvest=p.i; } }catch(e){}
+  try{ const r = await window.storage.get('proj_premissa'); if(r){ const p=JSON.parse(r.value); projInvest = (p.i!==undefined? p.i : p.g); } }catch(e){}
   const y = document.getElementById('year').value, m = document.getElementById('month').value;
   if(m==='ALL'){
     for(const g of GROUPS){
@@ -239,7 +243,7 @@ function applyScenario(raw, groupKey){
     return [leads,atend,agend,visita,prop,neg];
   }
   if(scenario==='proj'){
-    const leads = raw[0]*(1+projGrowth/100);
+    const leads = raw[0]*(1+projInvest/100);
     const rate = i => raw[0]>0 ? raw[i]/raw[i-1] : 0;
     let cur = leads;
     const out=[leads];
@@ -319,6 +323,7 @@ async function render(){
     <div class="kpi"><div class="lbl">Visitas</div><div class="val">${fmt(tot[3])}</div></div>
     <div class="kpi"><div class="lbl">Negócios</div><div class="val red">${fmt(tot[5])}</div></div>
     <div class="kpi"><div class="lbl">Conversão Lead→Negócio</div><div class="val">${convLeadNeg}</div></div>
+    <div class="kpi"><div class="lbl">Investimento Total</div><div class="val">${fmtR(totInv)}</div></div>
     <div class="kpi"><div class="lbl">CAC total</div><div class="val">${totCac?fmtR(totCac):'—'}</div></div>
     <div class="kpi"><div class="lbl">ROAS total</div><div class="val green">${totRoas?totRoas.toFixed(2)+'x':'—'}</div></div>
   `;
@@ -328,13 +333,36 @@ async function render(){
   else if(!isAll && String(y)==='2026' && m===6){ partialNote.textContent = '⚠ Mês parcial — dados até 22/07/2026, ainda em fechamento.'; }
   else { partialNote.textContent=''; }
 
+  const projSection = document.getElementById('projSummarySection');
+  const projSummary = document.getElementById('projSummary');
+  if(scenario==='proj'){
+    let atualLeads=0, atualNeg=0, atualInv=0;
+    for(const g of GROUPS){
+      atualLeads += monthData[g][0];
+      atualNeg += monthData[g][5];
+      atualInv += investData[invKey(y,isAll?'ALL':m,g)] || 0;
+    }
+    const projInvTotal = atualInv*(1+projInvest/100);
+    const deltaLeads = tot[0]-atualLeads;
+    const deltaNeg = tot[5]-atualNeg;
+    const deltaInv = projInvTotal-atualInv;
+    projSection.style.display='';
+    projSummary.innerHTML = `
+      <div class="kpi"><div class="lbl">Investimento: atual → projetado</div><div class="val">${fmtR(atualInv)} → <span style="color:var(--red)">${fmtR(projInvTotal)}</span></div></div>
+      <div class="kpi"><div class="lbl">Leads: atual → projetado</div><div class="val">${fmt(atualLeads)} → <span style="color:var(--green)">${fmt(tot[0])}</span></div></div>
+      <div class="kpi"><div class="lbl">Negócios: atual → projetado</div><div class="val">${fmt(atualNeg)} → <span style="color:var(--green)">${fmt(tot[5])}</span></div></div>
+      <div class="kpi"><div class="lbl">Ganho estimado</div><div class="val green">+${fmt(deltaLeads)} leads · +${fmt(deltaNeg)} negócios</div></div>
+    `;
+  } else {
+    projSection.style.display='none';
+  }
+
   document.getElementById('ticket').value = ticket;
   document.getElementById('i1').value = idealTargets.i1;
   document.getElementById('i2').value = idealTargets.i2;
   document.getElementById('i3').value = idealTargets.i3;
   document.getElementById('i4').value = idealTargets.i4;
   document.getElementById('i5').value = idealTargets.i5;
-  document.getElementById('projGrowth').value = projGrowth;
   document.getElementById('projInvest').value = projInvest;
 
   // bind investment inputs
@@ -374,9 +402,8 @@ document.getElementById('saveIdeal').addEventListener('click', async ()=>{
 });
 
 document.getElementById('saveProj').addEventListener('click', async ()=>{
-  projGrowth = parseFloat(document.getElementById('projGrowth').value)||0;
   projInvest = parseFloat(document.getElementById('projInvest').value)||0;
-  try{ await window.storage.set('proj_premissa', JSON.stringify({g:projGrowth,i:projInvest})); flashSave(); }catch(e){}
+  try{ await window.storage.set('proj_premissa', JSON.stringify({i:projInvest})); flashSave(); }catch(e){}
   render();
 });
 
