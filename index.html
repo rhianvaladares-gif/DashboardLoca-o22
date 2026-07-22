@@ -73,6 +73,26 @@ button.save:hover{background:var(--red-dark)}
 #content.animate tbody tr:nth-child(7){animation-delay:.29s}
 .kpi .val{transition:color .3s ease}
 select,input,.tab{transition:all .15s ease}
+#month option:checked{background:var(--red) linear-gradient(0deg, var(--red) 0%, var(--red) 100%);color:#fff}
+#month{scrollbar-width:thin}
+
+.month-dd{position:relative;display:inline-block}
+.month-dd button#monthDDBtn{
+  background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:8px;
+  padding:8px 10px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;min-width:110px;justify-content:space-between
+}
+.month-dd button#monthDDBtn .arrow{font-size:10px;color:var(--sub)}
+.month-dd-menu{
+  display:none;position:absolute;top:calc(100% + 6px);left:0;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.12);padding:8px;z-index:50;min-width:190px;max-height:280px;overflow-y:auto
+}
+.month-dd-menu.open{display:block}
+.month-dd-menu label{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px
+}
+.month-dd-menu label:hover{background:var(--card2)}
+.month-dd-menu label.all-option{font-weight:600;color:var(--red);border-bottom:1px solid var(--line);margin-bottom:4px;padding-bottom:8px}
+.month-dd-menu input{width:auto;margin:0}
 .tab:hover{color:var(--text)}
 select:hover,input:hover{border-color:var(--red)}
 </style>
@@ -84,7 +104,10 @@ select:hover,input:hover{border-color:var(--red)}
 
 <div class="bar">
   <select id="year"></select>
-  <select id="month"></select>
+  <div class="month-dd" id="monthDD">
+    <button type="button" id="monthDDBtn">Janeiro <span class="arrow">▾</span></button>
+    <div class="month-dd-menu" id="monthDDMenu"></div>
+  </div>
   <div class="tabs" id="scenarioTabs">
     <div class="tab active" data-s="atual">Atual</div>
     <div class="tab" data-s="ideal">Ideal</div>
@@ -95,6 +118,7 @@ select:hover,input:hover{border-color:var(--red)}
   <span class="status" id="saveStatus"></span>
   <span class="status" id="partialNote" style="color:var(--yellow)"></span>
 </div>
+<div class="note" style="margin:-10px 0 14px">Clique no seletor de mês e marque um ou vários meses pra somar juntos.</div>
 
 <div id="content">
 <div class="grid" id="kpis"></div>
@@ -207,15 +231,23 @@ async function loadPersisted(){
   try{ const r = await window.storage.get('ticket_medio'); if(r) ticket = parseFloat(r.value); }catch(e){}
   try{ const r = await window.storage.get('ideal_targets'); if(r) idealTargets = JSON.parse(r.value); }catch(e){}
   try{ const r = await window.storage.get('proj_premissa'); if(r){ const p=JSON.parse(r.value); projInvest = (p.i!==undefined? p.i : p.g); } }catch(e){}
-  const y = document.getElementById('year').value, m = document.getElementById('month').value;
-  if(m==='ALL'){
+  const y = document.getElementById('year').value;
+  const sel = getMonthSelection();
+  if(sel.isAll){
     for(const g of GROUPS){
       let sum=0;
       const n = MONTHS_WITH_DATA[y] || 12;
       for(let i=0;i<n;i++){ sum += await getInvest(y,i,g); }
       investData[invKey(y,'ALL',g)] = sum;
     }
+  } else if(sel.indices.length>1){
+    for(const g of GROUPS){
+      let sum=0;
+      for(const i of sel.indices){ sum += await getInvest(y,i,g); }
+      investData[invKey(y,'CUSTOM',g)] = sum;
+    }
   } else {
+    const m = sel.indices[0];
     for(const g of GROUPS){
       investData[invKey(y,m,g)] = await getInvest(y,m,g);
     }
@@ -225,9 +257,36 @@ async function loadPersisted(){
 function buildSelectors(){
   const yearSel = document.getElementById('year');
   [2025,2026].forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent=y; yearSel.appendChild(o); });
-  const monthSel = document.getElementById('month');
-  const optAll = document.createElement('option'); optAll.value='ALL'; optAll.textContent='📅 Geral do Ano'; monthSel.appendChild(optAll);
-  MONTHS.forEach((mm,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=mm; monthSel.appendChild(o); });
+
+  const menu = document.getElementById('monthDDMenu');
+  const allLbl = document.createElement('label');
+  allLbl.className='all-option';
+  allLbl.innerHTML = `<input type="checkbox" value="ALL"> 📅 Geral do Ano`;
+  menu.appendChild(allLbl);
+  MONTHS.forEach((mm,i)=>{
+    const lbl = document.createElement('label');
+    lbl.innerHTML = `<input type="checkbox" value="${i}"> ${mm}`;
+    menu.appendChild(lbl);
+  });
+  menu.querySelector('input[value="0"]').checked = true; // Janeiro por padrão
+}
+
+// Lê a seleção atual do dropdown de mês: 1 mês, vários meses, ou "Geral do Ano"
+function getMonthSelection(){
+  const checks = [...document.querySelectorAll('#monthDDMenu input:checked')].map(c=>c.value);
+  if(checks.length===0) return {isAll:false, indices:[0]}; // fallback: Janeiro
+  if(checks.includes('ALL')) return {isAll:true, indices:[]};
+  return {isAll:false, indices: checks.map(Number).sort((a,b)=>a-b)};
+}
+
+function updateMonthLabel(){
+  const sel = getMonthSelection();
+  const btn = document.getElementById('monthDDBtn');
+  let text;
+  if(sel.isAll) text = '📅 Geral do Ano';
+  else if(sel.indices.length===1) text = MONTHS[sel.indices[0]];
+  else text = sel.indices.map(i=>MONTHS[i].slice(0,3)).join(', ');
+  btn.innerHTML = `${text} <span class="arrow">▾</span>`;
 }
 
 function applyScenario(raw, groupKey){
@@ -260,9 +319,12 @@ async function render(){
   contentEl.classList.add('animate');
 
   const y = document.getElementById('year').value;
-  const mRaw = document.getElementById('month').value;
-  const isAll = mRaw === 'ALL';
-  const m = isAll ? null : parseInt(mRaw);
+  const sel = getMonthSelection();
+  const isAll = sel.isAll;
+  const isCustom = !isAll && sel.indices.length>1;
+  const isAgg = isAll || isCustom;
+  const m = isAgg ? null : sel.indices[0];
+  const aggKey = isAll ? 'ALL' : (isCustom ? 'CUSTOM' : m);
 
   let monthData;
   if(isAll){
@@ -271,6 +333,13 @@ async function render(){
       const sum=[0,0,0,0,0,0];
       const n = MONTHS_WITH_DATA[y] || 12;
       for(let i=0;i<n;i++){ const raw = DATA[y][i][g]; for(let k=0;k<6;k++) sum[k]+=raw[k]; }
+      monthData[g]=sum;
+    }
+  } else if(isCustom){
+    monthData = {};
+    for(const g of GROUPS){
+      const sum=[0,0,0,0,0,0];
+      for(const i of sel.indices){ const raw = DATA[y][i][g]; for(let k=0;k<6;k++) sum[k]+=raw[k]; }
       monthData[g]=sum;
     }
   } else {
@@ -284,7 +353,7 @@ async function render(){
   for(const g of GROUPS){
     const raw = monthData[g];
     const scen = applyScenario(raw, g);
-    const invKeyStr = invKey(y,isAll?'ALL':m,g);
+    const invKeyStr = invKey(y,aggKey,g);
     let inv = investData[invKeyStr] || 0;
     if(scenario==='proj') inv = inv*(1+projInvest/100);
     totInv += inv;
@@ -298,7 +367,7 @@ async function render(){
     tr.innerHTML = `<td>${g}</td>
       <td>${fmt(scen[0])}</td><td>${fmt(scen[1])}</td><td>${fmt(scen[2])}</td>
       <td>${fmt(scen[3])}</td><td>${fmt(scen[4])}</td><td>${fmt(scen[5])}</td>
-      <td>${(scenario==='atual' && !isAll)?`<input class="inv" data-g="${g}" type="number" value="${inv||''}" placeholder="0">`:fmtR(inv)}</td>
+      <td>${(scenario==='atual' && !isAgg)?`<input class="inv" data-g="${g}" type="number" value="${inv||''}" placeholder="0">`:fmtR(inv)}</td>
       <td>${cpl?fmtR(cpl):'—'}</td>
       <td>${cac?fmtR(cac):'—'}</td>
       <td>${roas? roas.toFixed(2)+'x' : '—'}</td>`;
@@ -317,7 +386,7 @@ async function render(){
   // KPIs
   const kpis = document.getElementById('kpis');
   const convLeadNeg = pct(tot[5],tot[0]);
-  const periodoLbl = isAll ? `Geral ${y}` : MONTHS[m];
+  const periodoLbl = isAll ? `Geral ${y}` : (isCustom ? `${sel.indices.map(i=>MONTHS[i].slice(0,3)).join('+')}/${y}` : MONTHS[m]);
   kpis.innerHTML = `
     <div class="kpi"><div class="lbl">Leads (${periodoLbl})</div><div class="val">${fmt(tot[0])}</div></div>
     <div class="kpi"><div class="lbl">Visitas</div><div class="val">${fmt(tot[3])}</div></div>
@@ -330,7 +399,7 @@ async function render(){
 
   const partialNote = document.getElementById('partialNote');
   if(isAll && String(y)==='2026'){ partialNote.textContent = '⚠ Ano parcial — soma real disponível apenas Jan–Jul/2026 (Ago–Dez ainda não lançados, entram como zero).'; }
-  else if(!isAll && String(y)==='2026' && m===6){ partialNote.textContent = '⚠ Mês parcial — dados até 22/07/2026, ainda em fechamento.'; }
+  else if(!isAgg && String(y)==='2026' && m===6){ partialNote.textContent = '⚠ Mês parcial — dados até 22/07/2026, ainda em fechamento.'; }
   else { partialNote.textContent=''; }
 
   const projSection = document.getElementById('projSummarySection');
@@ -340,7 +409,7 @@ async function render(){
     for(const g of GROUPS){
       atualLeads += monthData[g][0];
       atualNeg += monthData[g][5];
-      atualInv += investData[invKey(y,isAll?'ALL':m,g)] || 0;
+      atualInv += investData[invKey(y,aggKey,g)] || 0;
     }
     const projInvTotal = atualInv*(1+projInvest/100);
     const deltaLeads = tot[0]-atualLeads;
@@ -417,10 +486,33 @@ document.querySelectorAll('.tab').forEach(t=>{
 });
 
 document.getElementById('year').addEventListener('change', async ()=>{ await loadPersisted(); render(); });
-document.getElementById('month').addEventListener('change', async ()=>{ await loadPersisted(); render(); });
+
+document.getElementById('monthDDBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.getElementById('monthDDMenu').classList.toggle('open');
+});
+document.addEventListener('click', (e)=>{
+  const dd = document.getElementById('monthDD');
+  if(!dd.contains(e.target)) document.getElementById('monthDDMenu').classList.remove('open');
+});
+document.getElementById('monthDDMenu').addEventListener('change', async (e)=>{
+  const boxes = [...document.querySelectorAll('#monthDDMenu input')];
+  if(e.target.value==='ALL' && e.target.checked){
+    boxes.forEach(b=>{ if(b.value!=='ALL') b.checked=false; });
+  } else if(e.target.value!=='ALL' && e.target.checked){
+    boxes.find(b=>b.value==='ALL').checked=false;
+  }
+  if([...document.querySelectorAll('#monthDDMenu input:checked')].length===0){
+    e.target.checked = true; // não deixa ficar sem nenhum mês marcado
+  }
+  updateMonthLabel();
+  await loadPersisted();
+  render();
+});
 
 (async function init(){
   buildSelectors();
+  updateMonthLabel();
   await loadPersisted();
   render();
 })();
