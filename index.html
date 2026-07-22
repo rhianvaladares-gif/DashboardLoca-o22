@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>LAR Imóveis · Dashboard de Funil de Mídia</title>
+<style>
+:root{
+  --red:#ff4441; --red-dark:#c9302c; --bg:#e9e6e1; --card:#f7f5f1; --card2:#efece6;
+  --line:#d8d4cc; --text:#2e2c28; --sub:#7a766d; --green:#2f8f63; --yellow:#a3720f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;padding:24px}
+h1{font-size:20px;margin:0 0 2px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:20px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+select,input{background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
+.tabs{display:flex;gap:6px;background:var(--card);padding:4px;border-radius:10px}
+.tab{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--sub);user-select:none}
+.tab.active{background:var(--red);color:#fff;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.kpi .lbl{color:var(--sub);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.kpi .val{font-size:22px;font-weight:700;margin-top:4px}
+.kpi .val.red{color:var(--red)}
+.kpi .val.green{color:var(--green)}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{background:var(--card2);color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
+tr:last-child td{border-bottom:none}
+tr.total td{background:var(--card2);font-weight:700}
+.section{margin-bottom:26px}
+.section h2{font-size:14px;color:var(--red);margin:0 0 10px;letter-spacing:.03em;text-transform:uppercase}
+input.inv{width:90px;text-align:right;padding:5px 6px;font-size:12px}
+.note{color:var(--sub);font-size:11px;margin-top:8px}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.pill.g{background:rgba(62,207,142,.15);color:var(--green)}
+.pill.r{background:rgba(255,68,65,.15);color:var(--red)}
+.pill.y{background:rgba(240,180,41,.15);color:var(--yellow)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ideal-box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ideal-box label{display:block;font-size:11px;color:var(--sub);margin:8px 0 3px}
+.ideal-box input{width:100%}
+button.save{background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;margin-top:10px}
+button.save:hover{background:var(--red-dark)}
+.status{font-size:11px;color:var(--green);margin-left:8px}
+
+@keyframes fadeSlide{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes popIn{
+  0%{opacity:0;transform:scale(.92)}
+  60%{opacity:1;transform:scale(1.02)}
+  100%{opacity:1;transform:scale(1)}
+}
+#content.animate{animation:fadeSlide .35s ease}
+#content.animate .kpi{animation:popIn .4s ease backwards}
+#content.animate .kpi:nth-child(1){animation-delay:.02s}
+#content.animate .kpi:nth-child(2){animation-delay:.06s}
+#content.animate .kpi:nth-child(3){animation-delay:.10s}
+#content.animate .kpi:nth-child(4){animation-delay:.14s}
+#content.animate .kpi:nth-child(5){animation-delay:.18s}
+#content.animate .kpi:nth-child(6){animation-delay:.22s}
+#content.animate tbody tr{animation:fadeSlide .3s ease backwards}
+#content.animate tbody tr:nth-child(1){animation-delay:.05s}
+#content.animate tbody tr:nth-child(2){animation-delay:.09s}
+#content.animate tbody tr:nth-child(3){animation-delay:.13s}
+#content.animate tbody tr:nth-child(4){animation-delay:.17s}
+#content.animate tbody tr:nth-child(5){animation-delay:.21s}
+#content.animate tbody tr:nth-child(6){animation-delay:.25s}
+#content.animate tbody tr:nth-child(7){animation-delay:.29s}
+.kpi .val{transition:color .3s ease}
+select,input,.tab{transition:all .15s ease}
+.tab:hover{color:var(--text)}
+select:hover,input:hover{border-color:var(--red)}
+</style>
+</head>
+<body>
+
+<h1>LAR Imóveis · Funil de Mídia</h1>
+<div class="sub">Volume de leads, custo por etapa e cenários (Atual · Ideal · Projetado) — base R$ investimento editável</div>
+
+<div class="bar">
+  <select id="year"></select>
+  <select id="month"></select>
+  <div class="tabs" id="scenarioTabs">
+    <div class="tab active" data-s="atual">Atual</div>
+    <div class="tab" data-s="ideal">Ideal</div>
+    <div class="tab" data-s="proj">Projetado</div>
+  </div>
+  <span>Ticket médio (R$)</span>
+  <input id="ticket" type="number" step="1000" style="width:110px">
+  <span class="status" id="saveStatus"></span>
+  <span class="status" id="partialNote" style="color:var(--yellow)"></span>
+</div>
+
+<div id="content">
+<div class="grid" id="kpis"></div>
+
+<div class="section">
+  <h2>Funil por canal (unificado: Portais / Site / Meta / WhatsApp / ChavesNaMão / Outros)</h2>
+  <table id="funilTable">
+    <thead><tr>
+      <th>Canal</th><th>Leads</th><th>Atend.</th><th>Agend.</th><th>Visitas</th><th>Propostas</th><th>Negócios</th>
+      <th>Invest. (R$)</th><th>CPL</th><th>CAC</th><th>ROAS</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="note">Investimento pré-preenchido com a média mensal informada (Meta Ads = Facebook Ads · Portais = Zap/OLX + Imóvel Web · Site = Google Ads + Remarketing · ChavesNaMão = Chaves na Mão · Outros = Pontos de mídia LED/ônibus, institucional). Edite qualquer célula para sobrescrever mês a mês — fica salvo automaticamente. CPL = Invest/Leads · CAC = Invest/Negócios · ROAS = (Negócios × Ticket médio)/Invest.</div>
+</div>
+</div>
+
+<div class="two-col">
+  <div class="ideal-box">
+    <h2 style="color:var(--red);font-size:13px;margin:0 0 4px">Metas do cenário IDEAL (taxas de conversão, %)</h2>
+    <label>Lead → Atendimento</label><input id="i1" type="number" step="0.1">
+    <label>Atendimento → Agendamento</label><input id="i2" type="number" step="0.1">
+    <label>Agendamento → Visita</label><input id="i3" type="number" step="0.1">
+    <label>Visita → Proposta</label><input id="i4" type="number" step="0.1">
+    <label>Proposta → Negócio</label><input id="i5" type="number" step="0.1">
+    <button class="save" id="saveIdeal">Salvar metas</button>
+  </div>
+  <div class="ideal-box">
+    <h2 style="color:var(--red);font-size:13px;margin:0 0 4px">Premissa do cenário PROJETADO</h2>
+    <label>Crescimento de leads esperado (%) sobre o mês selecionado</label>
+    <input id="projGrowth" type="number" step="1">
+    <label>Investimento adicional esperado (%) sobre o investido no mês</label>
+    <input id="projInvest" type="number" step="1">
+    <div class="note" style="margin-top:10px">Projetado aplica o crescimento de leads sobre o volume real do mês, mantendo as taxas de conversão atuais do mês, e o investimento ajustado — útil para simular o próximo período.</div>
+    <button class="save" id="saveProj">Salvar premissa</button>
+  </div>
+</div>
+
+<script>
+const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const GROUPS = ['Portais','Site','Meta Ads','WhatsApp','ChavesNaMão','Outros'];
+// [leads, atendimentos, agendamentos, visitas, propostas, negocios]
+const DATA = { 2025: [
+ {Portais:[1655,653,211,203,57,24],Site:[613,427,196,193,46,20],'Meta Ads':[0,0,0,0,0,0],WhatsApp:[317,127,22,22,5,2],'ChavesNaMão':[225,66,19,19,3,2],Outros:[127,109,38,36,14,8]},
+ {Portais:[1082,373,111,104,31,13],Site:[393,260,94,88,23,12],'Meta Ads':[0,0,0,0,0,0],WhatsApp:[216,117,25,22,8,5],'ChavesNaMão':[196,49,15,15,6,2],Outros:[114,85,33,32,16,10]},
+ {Portais:[818,347,117,107,20,9],Site:[438,277,124,120,34,12],'Meta Ads':[3,3,0,0,0,0],WhatsApp:[182,103,20,20,7,3],'ChavesNaMão':[213,63,19,14,4,2],Outros:[88,72,25,24,9,5]},
+ {Portais:[757,393,167,147,30,9],Site:[433,320,173,163,36,18],'Meta Ads':[0,0,0,0,0,0],WhatsApp:[172,123,16,15,3,1],'ChavesNaMão':[135,43,12,11,1,0],Outros:[80,66,23,21,4,2]},
+ {Portais:[757,393,167,147,30,9],Site:[433,320,173,163,36,18],'Meta Ads':[0,0,0,0,0,0],WhatsApp:[172,123,16,15,3,1],'ChavesNaMão':[135,43,12,11,1,0],Outros:[80,66,23,21,4,2]},
+ {Portais:[966,494,131,123,31,15],Site:[408,282,119,110,31,15],'Meta Ads':[328,55,4,3,1,0],WhatsApp:[114,68,5,5,1,1],'ChavesNaMão':[194,79,22,21,8,3],Outros:[95,76,34,34,13,9]},
+ {Portais:[956,517,150,145,42,16],Site:[386,305,105,99,25,9],'Meta Ads':[385,74,4,3,0,0],WhatsApp:[109,75,9,8,1,1],'ChavesNaMão':[159,68,13,12,2,1],Outros:[87,72,29,25,9,5]},
+ {Portais:[528,337,97,89,30,8],Site:[524,334,112,104,27,11],'Meta Ads':[192,44,4,4,1,0],WhatsApp:[52,36,3,3,0,0],'ChavesNaMão':[77,37,10,10,3,0],Outros:[65,48,17,15,7,2]},
+ {Portais:[813,461,149,138,46,15],Site:[453,315,104,101,30,15],'Meta Ads':[294,94,6,4,1,0],WhatsApp:[58,35,2,1,1,0],'ChavesNaMão':[165,95,18,16,3,0],Outros:[73,62,17,17,5,4]},
+ {Portais:[919,524,148,140,43,22],Site:[303,207,80,76,26,11],'Meta Ads':[282,68,6,6,1,1],WhatsApp:[71,25,3,3,2,0],'ChavesNaMão':[144,75,19,18,3,2],Outros:[92,75,29,28,13,6]},
+ {Portais:[815,461,151,140,42,14],Site:[200,137,60,54,14,7],'Meta Ads':[175,43,3,3,2,0],WhatsApp:[109,38,5,5,2,1],'ChavesNaMão':[169,84,25,25,9,1],Outros:[89,68,19,19,6,3]},
+ {Portais:[748,400,125,111,34,9],Site:[248,164,62,58,21,9],'Meta Ads':[375,87,6,5,1,0],WhatsApp:[81,21,2,1,0,0],'ChavesNaMão':[158,86,29,24,7,5],Outros:[41,34,13,13,8,3]}
+]};
+const ZERO = {Portais:[0,0,0,0,0,0],Site:[0,0,0,0,0,0],'Meta Ads':[0,0,0,0,0,0],WhatsApp:[0,0,0,0,0,0],'ChavesNaMão':[0,0,0,0,0,0],Outros:[0,0,0,0,0,0]};
+DATA[2026] = [
+ {Portais:[809,434,159,143,51,18],Site:[299,201,84,80,24,7],'Meta Ads':[478,122,13,13,6,1],WhatsApp:[113,42,5,5,2,2],'ChavesNaMão':[135,80,33,28,8,6],Outros:[100,72,23,21,10,9]},
+ {Portais:[666,363,109,95,37,19],Site:[242,162,75,67,24,12],'Meta Ads':[254,74,8,8,4,3],WhatsApp:[68,30,9,8,3,0],'ChavesNaMão':[127,59,13,11,3,0],Outros:[65,54,19,18,11,7]},
+ {Portais:[818,416,134,115,39,12],Site:[278,187,90,77,37,19],'Meta Ads':[185,69,5,5,3,0],WhatsApp:[65,29,4,4,0,0],'ChavesNaMão':[143,76,19,17,7,2],Outros:[85,59,13,12,5,3]},
+ {Portais:[764,371,119,98,36,13],Site:[199,122,52,45,19,6],'Meta Ads':[465,115,9,7,4,1],WhatsApp:[141,30,6,3,1,1],'ChavesNaMão':[98,49,15,12,8,4],Outros:[66,45,17,15,9,7]},
+ {Portais:[813,497,135,111,38,16],Site:[197,139,56,53,22,12],'Meta Ads':[464,167,31,29,15,3],WhatsApp:[134,48,12,9,3,0],'ChavesNaMão':[73,50,10,8,3,1],Outros:[47,38,11,11,5,3]},
+ {Portais:[624,346,122,102,31,14],Site:[119,76,39,35,14,6],'Meta Ads':[228,59,12,10,2,0],WhatsApp:[125,36,15,10,3,1],'ChavesNaMão':[108,66,18,16,4,1],Outros:[73,59,17,15,8,5]},
+ {Portais:[427,238,75,60,23,6],Site:[107,73,35,28,12,3],'Meta Ads':[201,89,11,8,3,2],WhatsApp:[99,45,13,10,3,2],'ChavesNaMão':[71,41,12,8,5,0],Outros:[69,55,18,14,7,2]},
+ ZERO, ZERO, ZERO, ZERO, ZERO
+];
+
+let scenario='atual';
+let idealTargets={i1:15,i2:30,i3:90,i4:35,i5:40}; // taxas default (%)
+let projGrowth=10, projInvest=10, ticket=350000;
+// Médias de investimento mensal informadas pelo usuário (aplicadas como padrão em todos os meses)
+// Meta Ads = Facebook Ads | Portais = Zap+OLX + Imóvel Web | Site = Google Ads + Remarketing Google
+// ChavesNaMão = Chaves na Mão (portal) | Outros = Pontos de mídia (LED e ônibus, institucional/offline)
+const DEFAULT_INV = {
+  'Portais': 41909.42 + 6712.80,   // Zap,OLX + Imóvel Web
+  'Site': 30000 + 2000,            // Google Ads + Remarketing Google
+  'Meta Ads': 32673.38,            // Facebook Ads
+  'WhatsApp': 0,
+  'ChavesNaMão': 1592.00,
+  'Outros': 29250.00               // Pontos de mídia (LED e ônibus) - institucional, não geram lead direto rastreável
+};
+let investData={}; // key "y:m:g" -> valor
+
+const fmt = n => n.toLocaleString('pt-BR',{maximumFractionDigits:0});
+const fmtR = n => 'R$ '+n.toLocaleString('pt-BR',{maximumFractionDigits:0});
+const pct = (a,b) => b>0 ? (a/b*100).toFixed(1)+'%' : '—';
+
+function invKey(y,m,g){ return `inv:${y}:${m}:${g}`; }
+
+async function loadPersisted(){
+  try{ const r = await window.storage.get('ticket_medio'); if(r) ticket = parseFloat(r.value); }catch(e){}
+  try{ const r = await window.storage.get('ideal_targets'); if(r) idealTargets = JSON.parse(r.value); }catch(e){}
+  try{ const r = await window.storage.get('proj_premissa'); if(r){ const p=JSON.parse(r.value); projGrowth=p.g; projInvest=p.i; } }catch(e){}
+  const y = document.getElementById('year').value, m = document.getElementById('month').value;
+  for(const g of GROUPS){
+    try{
+      const r = await window.storage.get(invKey(y,m,g));
+      investData[invKey(y,m,g)] = r? parseFloat(r.value) : DEFAULT_INV[g];
+    }catch(e){ investData[invKey(y,m,g)] = DEFAULT_INV[g]; }
+  }
+}
+
+function buildSelectors(){
+  const yearSel = document.getElementById('year');
+  [2025,2026].forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent=y; yearSel.appendChild(o); });
+  const monthSel = document.getElementById('month');
+  MONTHS.forEach((mm,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=mm; monthSel.appendChild(o); });
+}
+
+function applyScenario(raw, groupKey){
+  // raw = [leads, atend, agend, visita, prop, neg]
+  if(scenario==='atual') return raw.slice();
+  if(scenario==='ideal'){
+    const leads = raw[0];
+    const atend = leads*idealTargets.i1/100;
+    const agend = atend*idealTargets.i2/100;
+    const visita = agend*idealTargets.i3/100;
+    const prop = visita*idealTargets.i4/100;
+    const neg = prop*idealTargets.i5/100;
+    return [leads,atend,agend,visita,prop,neg];
+  }
+  if(scenario==='proj'){
+    const leads = raw[0]*(1+projGrowth/100);
+    const rate = i => raw[0]>0 ? raw[i]/raw[i-1] : 0;
+    let cur = leads;
+    const out=[leads];
+    for(let i=1;i<=5;i++){ const r = raw[i-1]>0 ? raw[i]/raw[i-1] : 0; cur = cur*r; out.push(cur); }
+    return out;
+  }
+  return raw;
+}
+
+async function render(){
+  const contentEl = document.getElementById('content');
+  contentEl.classList.remove('animate');
+  void contentEl.offsetWidth; // força reflow pra reiniciar a animação
+  contentEl.classList.add('animate');
+
+  const y = document.getElementById('year').value;
+  const m = parseInt(document.getElementById('month').value);
+  const monthData = DATA[y][m];
+  const tbody = document.querySelector('#funilTable tbody');
+  tbody.innerHTML='';
+  let tot=[0,0,0,0,0,0], totInv=0;
+
+  for(const g of GROUPS){
+    const raw = monthData[g];
+    const scen = applyScenario(raw, g);
+    const invKeyStr = invKey(y,m,g);
+    let inv = investData[invKeyStr] || 0;
+    if(scenario==='proj') inv = inv*(1+projInvest/100);
+    totInv += inv;
+    for(let i=0;i<6;i++) tot[i]+=scen[i];
+
+    const cpl = scen[0]>0 ? inv/scen[0] : 0;
+    const cac = scen[5]>0 ? inv/scen[5] : 0;
+    const roas = inv>0 ? (scen[5]*ticket)/inv : 0;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${g}</td>
+      <td>${fmt(scen[0])}</td><td>${fmt(scen[1])}</td><td>${fmt(scen[2])}</td>
+      <td>${fmt(scen[3])}</td><td>${fmt(scen[4])}</td><td>${fmt(scen[5])}</td>
+      <td>${scenario==='atual'?`<input class="inv" data-g="${g}" type="number" value="${inv||''}" placeholder="0">`:fmtR(inv)}</td>
+      <td>${cpl?fmtR(cpl):'—'}</td>
+      <td>${cac?fmtR(cac):'—'}</td>
+      <td>${roas? roas.toFixed(2)+'x' : '—'}</td>`;
+    tbody.appendChild(tr);
+  }
+  const totCpl = tot[0]>0? totInv/tot[0]:0;
+  const totCac = tot[5]>0? totInv/tot[5]:0;
+  const totRoas = totInv>0? (tot[5]*ticket)/totInv:0;
+  const trT = document.createElement('tr'); trT.className='total';
+  trT.innerHTML = `<td>TOTAL</td><td>${fmt(tot[0])}</td><td>${fmt(tot[1])}</td><td>${fmt(tot[2])}</td>
+    <td>${fmt(tot[3])}</td><td>${fmt(tot[4])}</td><td>${fmt(tot[5])}</td>
+    <td>${fmtR(totInv)}</td><td>${totCpl?fmtR(totCpl):'—'}</td><td>${totCac?fmtR(totCac):'—'}</td>
+    <td>${totRoas? totRoas.toFixed(2)+'x':'—'}</td>`;
+  tbody.appendChild(trT);
+
+  // KPIs
+  const kpis = document.getElementById('kpis');
+  const convLeadNeg = pct(tot[5],tot[0]);
+  kpis.innerHTML = `
+    <div class="kpi"><div class="lbl">Leads (${MONTHS[m]})</div><div class="val">${fmt(tot[0])}</div></div>
+    <div class="kpi"><div class="lbl">Visitas</div><div class="val">${fmt(tot[3])}</div></div>
+    <div class="kpi"><div class="lbl">Negócios</div><div class="val red">${fmt(tot[5])}</div></div>
+    <div class="kpi"><div class="lbl">Conversão Lead→Negócio</div><div class="val">${convLeadNeg}</div></div>
+    <div class="kpi"><div class="lbl">CAC total</div><div class="val">${totCac?fmtR(totCac):'—'}</div></div>
+    <div class="kpi"><div class="lbl">ROAS total</div><div class="val green">${totRoas?totRoas.toFixed(2)+'x':'—'}</div></div>
+  `;
+
+  const partialNote = document.getElementById('partialNote');
+  if(String(y)==='2026' && m===6){ partialNote.textContent = '⚠ Mês parcial — dados até 22/07/2026, ainda em fechamento.'; }
+  else { partialNote.textContent=''; }
+
+  document.getElementById('ticket').value = ticket;
+  document.getElementById('i1').value = idealTargets.i1;
+  document.getElementById('i2').value = idealTargets.i2;
+  document.getElementById('i3').value = idealTargets.i3;
+  document.getElementById('i4').value = idealTargets.i4;
+  document.getElementById('i5').value = idealTargets.i5;
+  document.getElementById('projGrowth').value = projGrowth;
+  document.getElementById('projInvest').value = projInvest;
+
+  // bind investment inputs
+  document.querySelectorAll('input.inv').forEach(inp=>{
+    inp.addEventListener('change', async (e)=>{
+      const g = e.target.dataset.g;
+      const val = parseFloat(e.target.value)||0;
+      const k = invKey(y,m,g);
+      investData[k]=val;
+      try{ await window.storage.set(k, String(val)); flashSave(); }catch(err){}
+    });
+  });
+}
+
+function flashSave(){
+  const s = document.getElementById('saveStatus');
+  s.textContent = 'salvo ✓';
+  setTimeout(()=>s.textContent='',1500);
+}
+
+document.getElementById('ticket').addEventListener('change', async e=>{
+  ticket = parseFloat(e.target.value)||0;
+  try{ await window.storage.set('ticket_medio', String(ticket)); flashSave(); }catch(err){}
+  render();
+});
+
+document.getElementById('saveIdeal').addEventListener('click', async ()=>{
+  idealTargets = {
+    i1: parseFloat(document.getElementById('i1').value)||0,
+    i2: parseFloat(document.getElementById('i2').value)||0,
+    i3: parseFloat(document.getElementById('i3').value)||0,
+    i4: parseFloat(document.getElementById('i4').value)||0,
+    i5: parseFloat(document.getElementById('i5').value)||0,
+  };
+  try{ await window.storage.set('ideal_targets', JSON.stringify(idealTargets)); flashSave(); }catch(e){}
+  render();
+});
+
+document.getElementById('saveProj').addEventListener('click', async ()=>{
+  projGrowth = parseFloat(document.getElementById('projGrowth').value)||0;
+  projInvest = parseFloat(document.getElementById('projInvest').value)||0;
+  try{ await window.storage.set('proj_premissa', JSON.stringify({g:projGrowth,i:projInvest})); flashSave(); }catch(e){}
+  render();
+});
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    scenario = t.dataset.s;
+    render();
+  });
+});
+
+document.getElementById('year').addEventListener('change', async ()=>{ await loadPersisted(); render(); });
+document.getElementById('month').addEventListener('change', async ()=>{ await loadPersisted(); render(); });
+
+(async function init(){
+  buildSelectors();
+  await loadPersisted();
+  render();
+})();
+</script>
+</body>
+</html>
